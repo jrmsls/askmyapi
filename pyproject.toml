@@ -1,0 +1,43 @@
+[project]
+name = "askmyapi"
+version = "0.2.0"
+description = "Query any OpenAPI specification using a RAG-based AI assistant"
+authors = [{ name = "jrmsls" }]
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "CC0-1.0" }
+
+dependencies = [
+    "langchain>=0.2.0",
+    "langchain-community",
+    "langchain-openai",
+    "langchain-ollama",
+    "langchain-chroma",
+    "langchain-huggingface",
+    "sentence-transformers",
+    "gradio>=4.0.0",
+    "python-dotenv",
+    "tqdm",
+    "pyyaml",
+    "prance",
+    "openapi-spec-validator",
+    "tenacity"
+]
+
+[project.scripts]
+askmyapi = "askmyapi.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1"
+]
+
+[tool.pytest.ini_options]
+addopts = "--maxfail=1 --disable-warnings -q"

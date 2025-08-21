@@ -1,0 +1,22 @@
+# Include documentation and metadata
+include README.md
+include pyproject.toml
+
+# Include the JSON schema (source of truth)
+recursive-include src/askmyapi/schema *.json
+
+# Exclude local vector database and cache files
+exclude chroma_store/
+exclude cache/
+
+# Exclude test files (optional if you don't want to distribute them)
+exclude tests/*
+
+# Exclude virtual environments and build artifacts
+exclude .env
+exclude .venv
+exclude env/
+exclude venv/
+exclude build/
+exclude dist/
+exclude *.egg-info

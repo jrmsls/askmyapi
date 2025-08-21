@@ -1,0 +1,118 @@
+image: alpine/latest
+
+packages:
+  - git
+  - rsync
+  - curl
+  - jq
+
+environment:
+  GH_USER: "jrmsls"
+  BRANCH: "main"
+
+secrets: [ci-private-key, GH_TOKEN]
+
+tasks:
+  - setup: |
+      set -euxo pipefail
+      git config --global user.name "CI Snapshot"
+      git config --global user.email "jrmsls@users.noreply.github.com"
+      mkdir -p ~/.ssh
+      ssh-keyscan -H git.sr.ht >> ~/.ssh/known_hosts
+
+  - guard-main-only: |
+      set -euxo pipefail
+      cd askmyapi
+      CURRENT_COMMIT="$(git rev-parse HEAD)"
+      MAIN_COMMIT="$(git show-ref --hash refs/heads/main || true)"
+      if [ -z "$MAIN_COMMIT" ] || [ "$CURRENT_COMMIT" != "$MAIN_COMMIT" ]; then
+        echo "Skipping: not main branch"
+        exit 0
+      fi
+
+  - read-pyproject-name: |
+      set -euxo pipefail
+      cd askmyapi
+      NAME_LINE="$(sed -n '/^\[project\]/,/^\[/{/^[[:space:]]*name[[:space:]]*=/p}' pyproject.toml | head -n1 || true)"
+      PY_NAME="$(printf %s "$NAME_LINE" | sed -E 's/^[^=]+=//; s/^[[:space:]]+//; s/[[:space:]]+$//; s/^"//; s/"$//; s/^'\''//; s/'\''$//')"
+      if [ -n "$PY_NAME" ]; then
+        echo "GH_REPO=$PY_NAME" >> "$HOME/.buildenv"
+      else
+        echo "project.name not found"
+        exit 1
+      fi
+
+  - source-env: |
+      set -euxo pipefail
+      . "$HOME/.buildenv"
+      echo "Target GitHub repo: ${GH_USER}/${GH_REPO}"
+
+  - export-clean: |
+      set -euxo pipefail
+      cd askmyapi
+      mkdir -p ../snapshot
+      EXCLUDES=$(awk '/^exclude[[:space:]]+/ { $1=""; sub(/^[[:space:]]+/, "", $0); print "--exclude=" $0 }' MANIFEST.in)
+      rsync -a --delete \
+        --exclude=".git" \
+        --exclude=".vscode" \
+        --exclude=".idea" \
+        --exclude="__pycache__" \
+        --exclude="*.secret" \
+        --exclude="*.key" \
+        --exclude="*.pem" \
+        --exclude="*.crt" \
+        --exclude="node_modules" \
+        --exclude="*.ipynb_checkpoints" \
+        $EXCLUDES \
+        ./ ../snapshot/
+
+  - push-clean: |
+      set -euxo pipefail
+      . "$HOME/.buildenv"
+      cd snapshot
+      git init
+      if [ -f ../askmyapi/README.github.md ]; then
+        cp ../askmyapi/README.github.md README.md
+      fi
+      if [ -f ../askmyapi/.about ]; then
+        cp ../askmyapi/.about .about
+      fi
+      git add .
+      MSG="Snapshot"
+      git commit -m "$MSG"
+      git branch -M "${BRANCH}"
+      set +x
+      if [ -z "${GH_TOKEN:-}" ] && [ -f "$HOME/.secrets/GH_TOKEN" ]; then
+        GH_TOKEN="$(tr -d '\r\n' < "$HOME/.secrets/GH_TOKEN")"
+      fi
+      set -x
+      GITHUB_URL="https://${GH_TOKEN}@github.com/${GH_USER}/${GH_REPO}.git"
+      git remote add origin "${GITHUB_URL}"
+      git push -f origin "${BRANCH}"
+
+  - update-github-about: |
+      set -euxo pipefail
+      . "$HOME/.buildenv"
+      cd askmyapi
+      if [ -f ".about" ]; then
+        DESC="$(head -n1 ".about" | tr -d '\r')"
+      else
+        echo ".about missing; skip GitHub About update"
+        exit 0
+      fi
+      DESC="$(printf '%s' "$DESC" | cut -c1-160)"
+      set +x
+      if [ -z "${GH_TOKEN:-}" ] && [ -f "$HOME/.secrets/GH_TOKEN" ]; then
+        GH_TOKEN="$(tr -d '\r\n' < "$HOME/.secrets/GH_TOKEN")"
+      fi
+      set -x
+      PAYLOAD="$(jq -n --arg desc "$DESC" '{description:$desc}')"
+      if [ -n "${GH_TOKEN:-}" ]; then
+        curl -sS -X PATCH \
+          -H "Authorization: token ${GH_TOKEN}" \
+          -H "Accept: application/vnd.github+json" \
+          -d "${PAYLOAD}" \
+          "https://api.github.com/repos/${GH_USER}/${GH_REPO}" >/dev/null
+      else
+        echo "GH_TOKEN missing; skip GitHub About update"
+      fi

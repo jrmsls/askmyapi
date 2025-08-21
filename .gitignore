@@ -1,0 +1,38 @@
+# === Python standard ===
+__pycache__/
+*.py[cod]
+*.so
+*.pyd
+*.dll
+
+# === Virtual environments ===
+.env
+.venv/
+env/
+venv/
+
+# === Build / distribution artifacts ===
+build/
+dist/
+*.egg-info/
+*.egg
+
+# === IDE / editor files ===
+.vscode/
+.idea/
+*.swp
+
+# === Logs & temp files ===
+*.log
+*.tmp
+*.bak
+.DS_Store
+
+# === Local vector database & cache ===
+chroma_store/
+cache/
+
+# === Tests (optional) ===
+.coverage
+htmlcov/
+.pytest_cache/
